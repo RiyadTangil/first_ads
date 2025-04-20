@@ -1,0 +1,15 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/api/auth/[...nextauth]/route": "/api/auth/[...nextauth]",
+  "/api/auth/forgot-password/route": "/api/auth/forgot-password",
+  "/api/auth/register/route": "/api/auth/register",
+  "/api/auth/reset-password/route": "/api/auth/reset-password",
+  "/favicon.ico/route": "/favicon.ico",
+  "/admin/page": "/admin",
+  "/page": "/",
+  "/auth/forgot-password/page": "/auth/forgot-password",
+  "/auth/register/page": "/auth/register",
+  "/auth/reset-password/[token]/page": "/auth/reset-password/[token]",
+  "/dashboard/page": "/dashboard",
+  "/auth/login/page": "/auth/login"
+}

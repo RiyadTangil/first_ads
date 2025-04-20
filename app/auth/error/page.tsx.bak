@@ -1,0 +1,78 @@
+'use client';
+
+import React, { Suspense } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import Button from '@/components/ui/Button';
+
+// Disable static generation
+export const dynamic = 'force-dynamic';
+
+function ErrorContent() {
+  const searchParams = useSearchParams();
+  const error = searchParams.get('error');
+
+  let errorMessage = 'An unknown error occurred';
+
+  // Parse the error message based on the error code
+  switch (error) {
+    case 'CredentialsSignin':
+      errorMessage = 'Invalid email or password';
+      break;
+    case 'AccessDenied':
+      errorMessage = 'You do not have permission to access this resource';
+      break;
+    case 'OAuthSignin':
+    case 'OAuthCallback':
+    case 'OAuthCreateAccount':
+    case 'EmailCreateAccount':
+    case 'Callback':
+      errorMessage = 'There was an error with the authentication service';
+      break;
+    case 'SessionRequired':
+      errorMessage = 'You must be signed in to access this page';
+      break;
+    default:
+      if (error) {
+        errorMessage = error;
+      }
+  }
+
+  return (
+    <div>
+      <div className="text-center mb-6">
+        <h1 className="text-3xl font-bold text-red-600">Authentication Error</h1>
+        <p className="mt-2 text-gray-600">
+          {errorMessage}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-4">
+        <Link href="/auth/login">
+          <Button fullWidth>
+            Back to Sign In
+          </Button>
+        </Link>
+        
+        <Link href="/">
+          <Button variant="secondary" fullWidth>
+            Go to Home
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+export default function AuthErrorPage() {
+  return (
+    <Suspense fallback={
+      <div className="text-center">
+        <div className="animate-spin h-8 w-8 border-4 border-blue-500 rounded-full border-t-transparent mx-auto mb-4"></div>
+        <p>Loading error details...</p>
+      </div>
+    }>
+      <ErrorContent />
+    </Suspense>
+  );
+} 

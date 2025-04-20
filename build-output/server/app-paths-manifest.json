@@ -1,0 +1,15 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/api/auth/forgot-password/route": "app/api/auth/forgot-password/route.js",
+  "/api/auth/register/route": "app/api/auth/register/route.js",
+  "/api/auth/reset-password/route": "app/api/auth/reset-password/route.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/admin/page": "app/admin/page.js",
+  "/page": "app/page.js",
+  "/auth/forgot-password/page": "app/auth/forgot-password/page.js",
+  "/auth/register/page": "app/auth/register/page.js",
+  "/auth/reset-password/[token]/page": "app/auth/reset-password/[token]/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/auth/login/page": "app/auth/login/page.js"
+}
