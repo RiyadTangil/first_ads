@@ -1,35 +1,63 @@
-import React from 'react';
-import { Metadata } from 'next';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { redirect } from 'next/navigation';
-import DashboardShell from '@/components/dashboard/DashboardShell';
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { getUserFromLocalStorage } from '@/lib/localStorage';
+import ChatClient from './ChatClient';
 import AdminChatClient from './AdminChatClient';
+import DashboardShell from '@/components/dashboard/DashboardShell';
 
-export const metadata: Metadata = {
-  title: 'Support Chat | Admin Dashboard',
-  description: 'Admin interface for managing support conversations',
-};
+export default function ChatPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-export default async function ChatPage() {
-  const session = await getServerSession(authOptions);
+  useEffect(() => {
+    // Get user data from localStorage
+    const userData = getUserFromLocalStorage();
+    
+    if (!userData || !userData.id || !userData.token) {
+      router.push('/auth/login');
+      return;
+    }
+    
+    setUser(userData);
+    setIsLoading(false);
+  }, [router]);
 
-  // Check if user is logged in and is an admin
-  if (!session) {
-    redirect('/auth/login');
+  if (isLoading) {
+    return (
+      <DashboardShell>
+        <div className="flex justify-center items-center h-[calc(100vh-200px)]">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      </DashboardShell>
+    );
   }
-  
-  // Restrict access to admins only
-  // if (session.user?.role !== 'admin') {
-  //   redirect('/dashboard');
-  // }
 
   return (
     <DashboardShell>
-      <div className="flex flex-col h-full">
-        <h1 className="text-xl font-bold text-gray-800 mb-4">Support Conversations</h1>
-        <AdminChatClient />
+      <div className="mb-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between">
+          {user?.role === 'admin' ? (
+            <h1 className="text-2xl font-bold text-gray-800">Admin Chat Dashboard</h1>
+          ) : (
+            <h1 className="text-2xl font-bold text-gray-800">Support Chat</h1>
+          )}
+        </div>
+        <p className="text-gray-600 text-sm mt-1">
+          {user?.role === 'admin' 
+            ? 'Manage conversations with your users'
+            : 'Get help from our support team'
+          }
+        </p>
       </div>
+      
+      {user?.role === 'admin' ? (
+        <AdminChatClient />
+      ) : (
+        <ChatClient />
+      )}
     </DashboardShell>
   );
 } 
