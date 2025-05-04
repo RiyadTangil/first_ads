@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import connectDB from '@/lib/db';
+import { connectToDatabase } from '@/lib/db';
 import User from '@/models/User';
 import bcrypt from 'bcryptjs';
 
@@ -18,7 +18,7 @@ export async function PUT(req: NextRequest) {
     }
 
     // Connect to the database
-    await connectDB();
+    await connectToDatabase();
 
     // Get request body
     const { currentPassword, newPassword, confirmPassword } = await req.json();

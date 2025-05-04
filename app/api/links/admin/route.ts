@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import mongoose from 'mongoose';
+import Link from '@/models/Link';
 import User from '@/models/User';
-import jwt from 'jsonwebtoken';
 
-/**
- * GET /api/user/list
- * Get all users (admin only)
- */
+// Handler for GET requests - Get all links for admin
 export async function GET(request: NextRequest) {
   try {
     // Get adminId from query parameters
@@ -33,19 +30,19 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    // Query all users except admins
-    const users = await User.find({ role: { $ne: 'admin' } })
-      .select('_id name email username role createdAt')
-      .sort({ name: 1 });
+    // Query all links
+    const links = await Link.find({})
+      .populate('userId', 'name email') // Populate user details
+      .sort({ createdAt: -1 });
     
     return NextResponse.json({ 
-      users,
+      links,
       success: true 
     });
   } catch (error) {
-    console.error('Error fetching users for admin:', error);
+    console.error('Error fetching links for admin:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch users' },
+      { error: 'Failed to fetch links' },
       { status: 500 }
     );
   }
