@@ -11,11 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { Search } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { createLinkByAdmin, getAllLinks, updateLinkStatus, getAllUsers, getUserLinks, updateLink, deleteLink } from '@/lib/linksService';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
@@ -65,7 +65,7 @@ interface FormErrors {
 
 export default function ManageLinksPage() {
   const [isLoading, setIsLoading] = useState(true);
-  const [userData, setUserData] = useState<{id: string, name: string, role: string} | null>(null);
+  const [userData, setUserData] = useState<{ id: string, name: string, role: string } | null>(null);
   const [users, setUsers] = useState<UserWithLinks[]>([]);
   const [links, setLinks] = useState<Link[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -85,27 +85,27 @@ export default function ManageLinksPage() {
     status: 'approved'
   });
   const [formErrors, setFormErrors] = useState<FormErrors>({});
-  const [expandedUsers, setExpandedUsers] = useState<{[key: string]: boolean}>({});
+  const [expandedUsers, setExpandedUsers] = useState<{ [key: string]: boolean }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [userLinksLoading, setUserLinksLoading] = useState<{[key: string]: boolean}>({});
+  const [userLinksLoading, setUserLinksLoading] = useState<{ [key: string]: boolean }>({});
 
   // Fetch data when component mounts
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       setApiError(null);
-      
+
       try {
         // Get current user from localStorage
         const user = getUserFromLocalStorage();
         if (!user || !user.id || user.role !== 'admin') {
           throw new Error('Unauthorized. Admin access required.');
         }
-        
+
         setUserData(user);
-        
+
         // Fetch all users with their link counts
         const allUsers = await getAllUsers(user.id);
         setUsers(allUsers);
@@ -116,14 +116,14 @@ export default function ManageLinksPage() {
         setIsLoading(false);
       }
     };
-    
+
     fetchData();
   }, []);
-  
+
   // Extract unique users from links
   const extractUsersFromLinks = (links: Link[]): UserWithLinks[] => {
     const userMap = new Map<string, UserWithLinks>();
-    
+
     links.forEach(link => {
       if (!userMap.has(link.userId)) {
         userMap.set(link.userId, {
@@ -141,7 +141,7 @@ export default function ManageLinksPage() {
         });
       }
     });
-    
+
     // Count links per user
     links.forEach(link => {
       const user = userMap.get(link.userId);
@@ -153,7 +153,7 @@ export default function ManageLinksPage() {
         user.totalRevenue = (user.totalRevenue || 0) + link.revenue;
       }
     });
-    
+
     return Array.from(userMap.values());
   };
 
@@ -218,23 +218,23 @@ export default function ManageLinksPage() {
   // Handle delete link
   const handleDeleteLink = async () => {
     if (!userData?.id || !linkToDelete) return;
-    
+
     try {
       setIsSubmitting(true);
       setApiError(null);
-      
+
       const success = await deleteLink(linkToDelete.id, userData.id);
-      
+
       if (success) {
         // Remove from local state immediately to update UI
         setLinks(prevLinks => prevLinks.filter(link => link.id !== linkToDelete.id));
-        
+
         // Update user's link count in the state
         setUsers(prev => prev.map(user => {
           if (user._id === linkToDelete.userId) {
-            const isActive = 
+            const isActive =
               linkToDelete.status === 'approved' || linkToDelete.status === 'pending';
-            
+
             return {
               ...user,
               linksCount: Math.max(0, user.linksCount - 1),
@@ -246,7 +246,7 @@ export default function ManageLinksPage() {
           }
           return user;
         }));
-        
+
         // Close modal
         closeDeleteModal();
       }
@@ -261,7 +261,7 @@ export default function ManageLinksPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    
+
     // Clear error when user types
     if (formErrors[name as keyof FormErrors]) {
       setFormErrors(prev => ({ ...prev, [name]: undefined }));
@@ -270,47 +270,47 @@ export default function ManageLinksPage() {
 
   const validateForm = (): boolean => {
     const errors: FormErrors = {};
-    
+
     if (!formData.userId) {
       errors.userId = 'Please select a user';
     }
-    
+
     if (!formData.name.trim()) {
       errors.name = 'Link name is required';
     }
-    
+
     if (!formData.url.trim()) {
       errors.url = 'URL is required';
     } else if (!/^https?:\/\//.test(formData.url)) {
       errors.url = 'URL must start with http:// or https://';
     }
-    
+
     const impressions = parseInt(formData.impressions);
     if (isNaN(impressions) || impressions < 0) {
       errors.impressions = 'Impressions must be a positive number';
     }
-    
+
     const clicks = parseInt(formData.clicks);
     if (isNaN(clicks) || clicks < 0) {
       errors.clicks = 'Clicks must be a positive number';
     }
-    
+
     const cpm = parseFloat(formData.cpm);
     if (isNaN(cpm) || cpm < 0) {
       errors.cpm = 'CPM must be a positive number';
     }
-    
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
-    
+
     if (isEditMode) {
       handleUpdateLink();
     } else {
@@ -320,11 +320,11 @@ export default function ManageLinksPage() {
 
   const handleUpdateLink = async () => {
     if (!userData?.id || !editLinkId) return;
-    
+
     try {
       setIsSubmitting(true);
       setApiError(null);
-      
+
       const updatedLinkData = await updateLink(editLinkId, userData.id, {
         userId: formData.userId,
         name: formData.name,
@@ -334,7 +334,7 @@ export default function ManageLinksPage() {
         clicks: parseInt(formData.clicks),
         cpm: parseFloat(formData.cpm),
       });
-      console.log("link before => ",links)
+
       if (updatedLinkData) {
         // Create properly formatted updated link
         const updatedLink = {
@@ -352,13 +352,13 @@ export default function ManageLinksPage() {
           revenue: updatedLinkData.revenue,
           createdAt: updatedLinkData.createdAt
         };
+        let updateLinkCopy = { ...updatedLinkData, id: updatedLinkData.id }
         // Update in local state using proper structure
-        setLinks(prevLinks => 
-          prevLinks.map(link => link.id === editLinkId ? updatedLink : link)
+        setLinks(prevLinks =>
+          prevLinks.map(link => link.id === editLinkId ? { ...updatedLinkData, userId: link.userId } : link)
         );
-        console.log("link after => ",links)
-        console.log("updatedLinkData.link  after => ",updatedLink )
-        
+
+
         // Update user metrics in state if needed
         // This is more complex as we need to calculate the difference
         const oldLink = links.find(link => link.id === editLinkId);
@@ -371,20 +371,20 @@ export default function ManageLinksPage() {
               const oldRevenue = oldLink.revenue;
               const newRevenue = (parseInt(formData.impressions) / 1000) * parseFloat(formData.cpm);
               const revenueDiff = newRevenue - oldRevenue;
-              
+
               // Was active before, is active now - no change in activeLinksCount
               // Was active before, not active now - decrease activeLinksCount
               // Wasn't active before, is active now - increase activeLinksCount
               const wasActive = oldLink.status === 'approved' || oldLink.status === 'pending';
               const isActive = formData.status === 'approved' || formData.status === 'pending';
               let activeCountDiff = 0;
-              
+
               if (wasActive && !isActive) {
                 activeCountDiff = -1;
               } else if (!wasActive && isActive) {
                 activeCountDiff = 1;
               }
-              
+
               return {
                 ...user,
                 activeLinksCount: user.activeLinksCount + activeCountDiff,
@@ -396,7 +396,7 @@ export default function ManageLinksPage() {
             return user;
           }));
         }
-        
+
         // Close modal
         closeModal();
       }
@@ -416,19 +416,19 @@ export default function ManageLinksPage() {
     // Check if user has reached the limit of 5 active links
     const selectedUser = users.find(user => user._id === formData.userId);
     if (selectedUser && selectedUser.activeLinksCount >= 5) {
-      setFormErrors(prev => ({ 
-        ...prev, 
-        userId: 'This user has reached the maximum limit of 5 active links' 
+      setFormErrors(prev => ({
+        ...prev,
+        userId: 'This user has reached the maximum limit of 5 active links'
       }));
       return;
     }
-    
+
     // Create using the API
     if (userData?.id) {
       try {
         setIsSubmitting(true);
         setApiError(null);
-        
+
         const createdLink = await createLinkByAdmin(userData.id, {
           userId: formData.userId,
           name: formData.name,
@@ -438,17 +438,17 @@ export default function ManageLinksPage() {
           clicks: parseInt(formData.clicks),
           cpm: parseFloat(formData.cpm),
         });
-        
+
         if (createdLink) {
           // Add to local state
           setLinks(prev => [createdLink, ...prev]);
-          
+
           // Update user's active links count in the state
           setUsers(prev => prev.map(user => {
             if (user._id === formData.userId) {
-              const isActive = 
+              const isActive =
                 formData.status === 'approved' || formData.status === 'pending';
-              
+
               return {
                 ...user,
                 linksCount: user.linksCount + 1,
@@ -460,7 +460,7 @@ export default function ManageLinksPage() {
             }
             return user;
           }));
-          
+
           // Close modal
           closeModal();
         }
@@ -475,7 +475,7 @@ export default function ManageLinksPage() {
 
   // Get links for specific user
   const getUserLinksFromState = (userId: string) => {
-    return links.filter(link => link.userId === userId);
+    return links.filter(link => link.userId._id === userId);
   };
 
   // Toggle user expansion and load user links if needed
@@ -488,39 +488,39 @@ export default function ManageLinksPage() {
       }));
       return;
     }
-    
+
     // First, expand immediately to show loading state
     setExpandedUsers(prev => ({
       ...prev,
       [userId]: true
     }));
-    
+
     // Then load the user's links
     await loadUserLinks(userId);
   };
-  
+
   // Load links for a specific user
   const loadUserLinks = async (userId: string) => {
     if (!userData?.id) return;
-    
+
     // Check if we already have links for this user
     const existingLinks = links.filter(link => link.userId === userId);
     if (existingLinks.length > 0) {
       console.log(`Using ${existingLinks.length} cached links for user ${userId}`);
       return; // Already have links for this user
     }
-    
+
     // Set loading state for this user
     setUserLinksLoading(prev => ({
       ...prev,
       [userId]: true
     }));
-    
+
     try {
       console.log(`Fetching links for user ${userId}`);
       const userLinks = await getUserLinks(userId);
       console.log(`Fetched ${userLinks.length} links for user ${userId}`);
-      
+
       // Add the links to the state
       setLinks(prev => {
         // Remove any existing links for this user (shouldn't be any)
@@ -542,12 +542,12 @@ export default function ManageLinksPage() {
   // Handle status update
   const handleStatusUpdate = async (linkId: string, status: 'approved' | 'rejected') => {
     if (!userData?.id) return;
-    
+
     try {
       const success = await updateLinkStatus(linkId, status, userData.id);
-      
+
       if (success) {
-        setLinks(prev => prev.map(link => 
+        setLinks(prev => prev.map(link =>
           link.id === linkId ? { ...link, status } : link
         ));
       }
@@ -597,7 +597,7 @@ export default function ManageLinksPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="border-0 shadow-md overflow-hidden bg-white hover:shadow-lg transition-shadow">
           <CardContent className="p-0">
             <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-100 border-b border-blue-100">
@@ -611,7 +611,7 @@ export default function ManageLinksPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="border-0 shadow-md overflow-hidden bg-white hover:shadow-lg transition-shadow">
           <CardContent className="p-0">
             <div className="p-4 bg-gradient-to-r from-yellow-50 to-amber-100 border-b border-yellow-100">
@@ -627,7 +627,7 @@ export default function ManageLinksPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="border-0 shadow-md overflow-hidden bg-white hover:shadow-lg transition-shadow">
           <CardContent className="p-0">
             <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-100 border-b border-green-100">
@@ -643,7 +643,7 @@ export default function ManageLinksPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="border-0 shadow-md overflow-hidden bg-white hover:shadow-lg transition-shadow">
           <CardContent className="p-0">
             <div className="p-4 bg-gradient-to-r from-purple-50 to-violet-100 border-b border-purple-100">
@@ -657,7 +657,7 @@ export default function ManageLinksPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="border-0 shadow-md overflow-hidden bg-white hover:shadow-lg transition-shadow">
           <CardContent className="p-0">
             <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-100 border-b border-emerald-100">
@@ -723,10 +723,9 @@ export default function ManageLinksPage() {
                   {users.map((user) => (
                     <React.Fragment key={user._id}>
                       {/* User Row */}
-                      <TableRow 
-                        className={`hover:bg-blue-50 cursor-pointer transition-colors ${
-                          expandedUsers[user._id] ? 'bg-blue-50' : ''
-                        }`}
+                      <TableRow
+                        className={`hover:bg-blue-50 cursor-pointer transition-colors ${expandedUsers[user._id] ? 'bg-blue-50' : ''
+                          }`}
                         onClick={() => toggleUserExpanded(user._id)}
                       >
                         <TableCell className="p-4">
@@ -758,7 +757,7 @@ export default function ManageLinksPage() {
                         <TableCell className="text-right font-mono">{user.totalClicks.toLocaleString()}</TableCell>
                         <TableCell className="text-right font-semibold">{formatCurrency(user.totalRevenue)}</TableCell>
                       </TableRow>
-                      
+
                       {/* Expanded Links Section */}
                       {expandedUsers[user._id] && (
                         <TableRow className="bg-gray-50">
@@ -778,7 +777,7 @@ export default function ManageLinksPage() {
                                   Add New Link
                                 </button>
                               </div>
-                              
+
                               {/* Loading state for links */}
                               {userLinksLoading[user._id] ? (
                                 <div className="flex justify-center py-12">
@@ -792,19 +791,19 @@ export default function ManageLinksPage() {
                                         <div className="flex-1">
                                           <div className="flex items-center mb-2">
                                             <h5 className="font-medium text-gray-800">{link.name}</h5>
-                                            <Badge 
-                                              variant={link.status === 'approved' ? 'success' : link.status === 'pending' ? 'warning' : 'destructive'} 
+                                            <Badge
+                                              variant={link.status === 'approved' ? 'success' : link.status === 'pending' ? 'warning' : 'destructive'}
                                               className="ml-2 capitalize"
                                             >
                                               {link.status}
                                             </Badge>
                                           </div>
-                                          
+
                                           <div className="flex items-center text-sm text-gray-500 mb-3">
                                             <LinkIcon className="h-4 w-4 mr-1.5" />
                                             <span className="truncate max-w-md">{link.url}</span>
                                           </div>
-                                          
+
                                           <div className="grid grid-cols-4 gap-4">
                                             <div>
                                               <div className="text-xs text-gray-500">Impressions</div>
@@ -824,11 +823,11 @@ export default function ManageLinksPage() {
                                             </div>
                                           </div>
                                         </div>
-                                        
+
                                         <div className="flex space-x-2 ml-4">
                                           {/* Edit button */}
-                                          <button 
-                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-md transition-colors" 
+                                          <button
+                                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
                                             title="Edit Link"
                                             onClick={(e) => {
                                               e.stopPropagation();
@@ -837,10 +836,10 @@ export default function ManageLinksPage() {
                                           >
                                             <PencilIcon className="h-5 w-5" />
                                           </button>
-                                          
+
                                           {/* Delete button */}
-                                          <button 
-                                            className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors" 
+                                          <button
+                                            className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
                                             title="Delete Link"
                                             onClick={(e) => {
                                               e.stopPropagation();
@@ -849,12 +848,12 @@ export default function ManageLinksPage() {
                                           >
                                             <TrashIcon className="h-5 w-5" />
                                           </button>
-                                          
+
                                           {/* Existing approval/reject buttons for pending links */}
                                           {link.status === 'pending' && (
                                             <>
-                                              <button 
-                                                className="p-2 text-green-600 hover:bg-green-50 rounded-md transition-colors" 
+                                              <button
+                                                className="p-2 text-green-600 hover:bg-green-50 rounded-md transition-colors"
                                                 title="Approve Link"
                                                 onClick={(e) => {
                                                   e.stopPropagation();
@@ -865,8 +864,8 @@ export default function ManageLinksPage() {
                                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" />
                                                 </svg>
                                               </button>
-                                              <button 
-                                                className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors" 
+                                              <button
+                                                className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
                                                 title="Reject Link"
                                                 onClick={(e) => {
                                                   e.stopPropagation();
@@ -934,7 +933,7 @@ export default function ManageLinksPage() {
                 <DialogTitle className="text-xl font-semibold">
                   {isEditMode ? 'Edit Link' : 'Create New Link'}
                 </DialogTitle>
-                <button 
+                <button
                   onClick={closeModal}
                   className="text-white/80 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white/30 rounded-full"
                   disabled={isSubmitting}
@@ -946,7 +945,7 @@ export default function ManageLinksPage() {
                 {isEditMode ? 'Update the existing ad link information' : 'Create a new ad link for a user account'}
               </DialogDescription>
             </DialogHeader>
-            
+
             <form onSubmit={handleSubmitForm} className="p-6 max-h-[75vh] overflow-y-auto">
               {apiError && (
                 <Alert className="mb-6 border-red-200 bg-red-50 text-red-800">
@@ -954,7 +953,7 @@ export default function ManageLinksPage() {
                   <AlertDescription>{apiError}</AlertDescription>
                 </Alert>
               )}
-              
+
               <div className="space-y-6">
                 {/* User Selection */}
                 <div>
@@ -990,7 +989,7 @@ export default function ManageLinksPage() {
                     </p>
                   )}
                 </div>
-                
+
                 {/* Link Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1020,7 +1019,7 @@ export default function ManageLinksPage() {
                     </p>
                   )}
                 </div>
-                
+
                 {/* Link URL */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1050,7 +1049,7 @@ export default function ManageLinksPage() {
                     </p>
                   )}
                 </div>
-                
+
                 {/* Status */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
@@ -1077,7 +1076,7 @@ export default function ManageLinksPage() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="bg-gray-50 p-5 rounded-lg border border-gray-200 mt-6">
                   <h4 className="text-sm font-semibold text-gray-700 mb-4 flex items-center">
                     <svg className="h-5 w-5 mr-2 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1085,7 +1084,7 @@ export default function ManageLinksPage() {
                     </svg>
                     Performance Metrics
                   </h4>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Impressions */}
                     <div>
@@ -1104,7 +1103,7 @@ export default function ManageLinksPage() {
                         <p className="mt-1 text-xs text-red-600">{formErrors.impressions}</p>
                       )}
                     </div>
-                    
+
                     {/* Clicks */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Clicks</label>
@@ -1122,7 +1121,7 @@ export default function ManageLinksPage() {
                         <p className="mt-1 text-xs text-red-600">{formErrors.clicks}</p>
                       )}
                     </div>
-                    
+
                     {/* CPM */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">CPM ($)</label>
@@ -1142,18 +1141,22 @@ export default function ManageLinksPage() {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Calculated Fields */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 bg-white p-4 rounded-lg border border-gray-100">
                     <div>
                       <label className="block text-xs font-medium text-gray-500 mb-1">CTR (Calculated)</label>
                       <div className="text-lg font-semibold text-blue-600">
-                        {formData.impressions && formData.clicks ? 
-                          ((parseInt(formData.clicks) / parseInt(formData.impressions)) * 100).toFixed(2) : 
-                          0}%
-                      </div>
+
+                        {(() => {
+                          const impressions = parseInt(formData.impressions);
+                          const clicks = parseInt(formData.clicks);
+                          if (!impressions || !clicks || impressions === 0) return '0%';
+                          return ((clicks / impressions) * 100).toFixed(2) + '%';
+                        })()}
+                      </div> 
                     </div>
-                    
+
                     <div>
                       <label className="block text-xs font-medium text-gray-500 mb-1">Revenue (Calculated)</label>
                       <div className="text-lg font-semibold text-green-600">
@@ -1165,7 +1168,7 @@ export default function ManageLinksPage() {
                   </div>
                 </div>
               </div>
-              
+
               <DialogFooter className="flex justify-end space-x-3 mt-8">
                 <button
                   type="button"
@@ -1206,12 +1209,12 @@ export default function ManageLinksPage() {
                 This action cannot be undone
               </DialogDescription>
             </DialogHeader>
-            
+
             <div className="p-6">
               <p className="mb-4 text-gray-700">
                 Are you sure you want to delete the link "{linkToDelete.name}"? This will permanently remove the link and all associated data.
               </p>
-              
+
               <div className="flex justify-end space-x-3 mt-6">
                 <button
                   type="button"
