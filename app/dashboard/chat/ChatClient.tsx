@@ -15,16 +15,6 @@ import {
   ConversationResponse,
   MessageResponse
 } from '@/lib/chatService';
-import { 
-  initSocketClient,
-  joinUserRoom,
-  joinConversation,
-  leaveConversation,
-  sendSocketMessage,
-  markMessagesReadSocket,
-  onReceiveMessage,
-  onMessagesRead
-} from '@/lib/socketClient';
 
 interface ChatClientProps {}
 
@@ -47,6 +37,7 @@ export default function ChatClient({}: ChatClientProps) {
   const [user, setUser] = useState<any>(null);
   const [admins, setAdmins] = useState<any[]>([]);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   
   // Calculate chat stats
   const lastMessageTime = messages.length > 0 ? messages[messages.length - 1].timestamp : new Date();
@@ -57,16 +48,6 @@ export default function ChatClient({}: ChatClientProps) {
     const userData = getUserFromLocalStorage();
     if (userData) {
       setUser(userData);
-      
-      // Initialize socket connection
-      initSocketClient()
-        .then(() => {
-          // Join user room
-          return joinUserRoom(userData.id, userData.role || 'user');
-        })
-        .catch(err => {
-          console.error('Failed to initialize socket:', err);
-        });
     }
   }, []);
   
@@ -136,7 +117,6 @@ export default function ChatClient({}: ChatClientProps) {
         // Mark messages as read
         if (user.id) {
           await apiMarkAsRead(currentConversation._id, user.id);
-          await markMessagesReadSocket(currentConversation._id, user.id);
         }
         
         setIsLoading(false);
@@ -152,74 +132,52 @@ export default function ChatClient({}: ChatClientProps) {
     }
   }, [user?.id, admins]);
 
-  // Set up socket event listeners
+  // Set up polling for messages
   useEffect(() => {
-    if (!conversation?._id) return;
-    
-    // Set up listeners for the current conversation
-    const removeMessageListener = onReceiveMessage(async (message) => {
-      // Only update if the message is for the current conversation
-      if (conversation._id === message.conversation) {
-        setMessages(prev => [...prev, convertToMessageType(message)]);
-        
-        // Mark message as read if it's from an admin
-        if (message.senderType === 'admin' && user?.id) {
-          await apiMarkAsRead(message.conversation, user.id);
-          await markMessagesReadSocket(message.conversation, user.id);
+    if (!conversation?._id || !user?.id) return;
+
+    // Clear any existing polling interval
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+    }
+
+    // Set up new polling interval
+    const interval = setInterval(async () => {
+      try {
+        // Fetch latest messages
+        const messagesData = await getMessages(conversation._id);
+        setMessages(messagesData.map(convertToMessageType));
+
+        // Mark messages as read
+        if (conversation.unreadCount > 0) {
+          await apiMarkAsRead(conversation._id, user.id);
         }
+      } catch (error) {
+        console.error('Error polling messages:', error);
       }
-    });
-    
-    // Set up listener for read receipts
-    const removeReadListener = onMessagesRead(({ conversationId, userId }) => {
-      // Update messages to show as read
-      if (conversation._id === conversationId) {
-        setMessages(prev => 
-          prev.map(msg => 
-            msg.sender === 'user' ? { ...msg, read: true } : msg
-          )
-        );
-      }
-    });
-    
-    // Join the conversation room
-    joinConversation(conversation._id);
-    
-    // Clean up
+    }, 3000); // Poll every 3 seconds
+
+    setPollingInterval(interval);
+
+    // Cleanup
     return () => {
-      removeMessageListener();
-      removeReadListener();
-      
-      // Leave the conversation room
-      if (conversation._id) {
-        leaveConversation(conversation._id);
+      if (interval) {
+        clearInterval(interval);
       }
     };
   }, [conversation?._id, user?.id]);
 
-  // Handle message submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!conversation?._id || !user?.id || newMessage.trim() === '') return;
-    
+    if (!newMessage.trim() || !conversation?._id || !user?.id) return;
+
     try {
-      // Send the message via API
-      const sentMessage = await apiSendMessage(
-        conversation._id,
-        user.id,
-        newMessage,
-        'user'
-      );
-      
-      // Add the message to the UI
-      setMessages(prev => [...prev, convertToMessageType(sentMessage)]);
+      const message = await apiSendMessage(conversation._id, user.id, newMessage, 'user');
+      setMessages(prev => [...prev, convertToMessageType(message)]);
       setNewMessage('');
-      
-      // Send the message via Socket.IO
-      await sendSocketMessage(conversation._id, sentMessage);
-    } catch (err) {
-      console.error('Failed to send message:', err);
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      setError('Failed to send message. Please try again.');
     }
   };
 
@@ -283,7 +241,7 @@ export default function ChatClient({}: ChatClientProps) {
         <div className="overflow-y-auto flex-1 pr-2">
           {messages.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              <p>No messages yet. Start a conversation!</p>
+              <p>No messages yet. Start a conversation with FastyAds support!</p>
             </div>
           ) : (
             <div className="space-y-4">

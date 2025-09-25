@@ -13,14 +13,6 @@ import {
   createConversation,
   MessageResponse
 } from '@/lib/chatService';
-import { 
-  ensureSocketConnected, 
-  joinUserRoom,
-  joinConversation, 
-  leaveConversation, 
-  sendSocketMessage, 
-  markMessagesReadSocket
-} from '@/lib/socketClient';
 
 interface ChatProps {
   onClose?: () => void;
@@ -43,7 +35,7 @@ const Chat: React.FC<ChatProps> = ({ onClose }) => {
   const [user, setUser] = useState<any>(null);
   const [conversation, setConversation] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
 
   // Get user info on mount
   useEffect(() => {
@@ -54,103 +46,9 @@ const Chat: React.FC<ChatProps> = ({ onClose }) => {
       setError("Please log in to use the chat feature");
       setLoading(false);
     }
-    
-    // Set up polling for new messages
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
   }, []);
 
-  // Initialize Socket.IO
-  useEffect(() => {
-    // Set up Socket.IO listeners
-    let socket: any = null;
-    let isSocketInitialized = false;
-    
-    const setupSocketListeners = async () => {
-      try {
-        // Get the socket connection
-        socket = await ensureSocketConnected();
-        
-        // Join user room if we have user data
-        if (user?.id) {
-          await joinUserRoom(user.id, user.role || 'user');
-        }
-        
-        // Listen for new messages
-        socket.on('receive_message', (message: any) => {
-          // Convert the message to our format and add it to the messages state
-          // Only update if we're currently viewing this conversation
-          if (conversation?._id === message.conversation) {
-            setMessages(prev => {
-              // Check if message already exists in the list to avoid duplicates
-              const messageExists = prev.some(msg => msg.id === message._id);
-              if (messageExists) {
-                return prev;
-              }
-              return [...prev, convertToMessageType(message)];
-            });
-            
-            // Mark message as read if it's from an admin
-            if (message.senderType === 'admin' && user?.id) {
-              markMessagesAsRead(message.conversation, user.id).catch(console.error);
-              markMessagesReadSocket(message.conversation, user.id).catch(console.error);
-            }
-          }
-        });
-        
-        // Listen for read receipts
-        socket.on('messages_read', ({ conversationId, userId }: any) => {
-          // Update messages to show as read
-          if (conversation?._id === conversationId) {
-            setMessages(prev => 
-              prev.map(msg => 
-                msg.sender === 'user' ? { ...msg, read: true } : msg
-              )
-            );
-          }
-        });
-        
-        isSocketInitialized = true;
-      } catch (err) {
-        console.error('Failed to initialize socket:', err);
-      }
-    };
-    
-    setupSocketListeners();
-    
-    // Clean up on unmount
-    return () => {
-      if (socket && isSocketInitialized) {
-        socket.off('receive_message');
-        socket.off('messages_read');
-        
-        // Leave conversation room if we were in one
-        if (conversation?._id) {
-          leaveConversation(conversation._id).catch(console.error);
-        }
-      }
-    };
-  }, [conversation?._id, user?.id]);
-
-  // Join conversation room when the conversation changes
-  useEffect(() => {
-    if (conversation?._id) {
-      // Join the conversation room to receive messages
-      joinConversation(conversation._id);
-    }
-    
-    return () => {
-      if (conversation?._id) {
-        // Leave the conversation room when we change conversations
-        leaveConversation(conversation._id);
-      }
-    };
-  }, [conversation?._id]);
-
-  // Update loadOrCreateConversation function to remove polling
+  // Load or create conversation
   useEffect(() => {
     async function loadOrCreateConversation() {
       if (!user?.id) return;
@@ -196,50 +94,76 @@ const Chat: React.FC<ChatProps> = ({ onClose }) => {
         setMessages(messagesData.map(convertToMessageType));
         
         // Mark all messages as read
-        await markMessagesAsRead(currentConversation._id, user.id);
-        markMessagesReadSocket(currentConversation._id, user.id);
+        if (currentConversation.unreadCount > 0) {
+          await markMessagesAsRead(currentConversation._id, user.id);
+        }
         
         setLoading(false);
-      } catch (err) {
-        console.error('Error loading conversation:', err);
-        setError('Unable to connect to chat. Please try again later.');
+      } catch (error) {
+        console.error('Error loading conversation:', error);
+        setError('Failed to load conversation. Please try again later.');
         setLoading(false);
       }
     }
-    
+
     if (user?.id) {
       loadOrCreateConversation();
     }
   }, [user?.id]);
 
-  // Update handleSubmit to use Socket.IO
+  // Set up polling for messages
+  useEffect(() => {
+    if (!conversation?._id || !user?.id) return;
+
+    // Clear any existing polling interval
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+    }
+
+    // Set up new polling interval
+    const interval = setInterval(async () => {
+      try {
+        // Fetch latest messages
+        const messagesData = await getMessages(conversation._id);
+        
+        // Check if we have new messages
+        const currentMessageIds = new Set(messages.map(m => m.id));
+        const hasNewMessages = messagesData.some(m => !currentMessageIds.has(m._id));
+        
+        if (hasNewMessages) {
+          setMessages(messagesData.map(convertToMessageType));
+          
+          // Mark messages as read if there are unread messages
+          const unreadCount = messagesData.filter(m => !m.read && m.senderType === 'admin').length;
+          if (unreadCount > 0) {
+            await markMessagesAsRead(conversation._id, user.id);
+          }
+        }
+      } catch (error) {
+        console.error('Error polling messages:', error);
+      }
+    }, 3000); // Poll every 3 seconds
+
+    setPollingInterval(interval);
+
+    // Cleanup
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [conversation?._id, user?.id, messages]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!conversation?._id || !user?.id || !newMessage.trim()) return;
-    
+    if (!newMessage.trim() || !conversation?._id || !user?.id) return;
+
     try {
-      // Send message to API
-      const sentMessage = await sendMessage(
-        conversation._id,
-        user.id,
-        newMessage,
-        'user'
-      );
-      
-      // Add the message to UI
-      setMessages(prev => [...prev, convertToMessageType(sentMessage)]);
+      const message = await sendMessage(conversation._id, user.id, newMessage.trim(), 'user');
+      setMessages(prev => [...prev, convertToMessageType(message)]);
       setNewMessage('');
-      
-      // Send the message via Socket.IO
-      sendSocketMessage(conversation._id, sentMessage);
-      
-      // Force scroll to bottom
-      setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-    } catch (err) {
-      console.error('Failed to send message:', err);
+    } catch (error) {
+      console.error('Failed to send message:', error);
       setError('Failed to send message. Please try again.');
     }
   };
@@ -251,108 +175,95 @@ const Chat: React.FC<ChatProps> = ({ onClose }) => {
 
   if (loading) {
     return (
-      <div className="flex flex-col bg-white rounded-lg shadow-xl w-80 sm:w-96 h-96 border border.gray-200">
-        <div className="flex items-center justify-between bg-blue-600 text-white p-4 rounded-t-lg">
-          <h3 className="font-medium">Support Chat</h3>
-          <button
-            onClick={onClose}
-            className="text-white hover:text-gray-200"
-          >
-            <XMarkIcon className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col bg-white rounded-lg shadow-xl w-80 sm:w-96 h-96 border border-gray-200">
-        <div className="flex items-center justify-between bg-blue-600 text-white p-4 rounded-t-lg">
-          <h3 className="font-medium">Support Chat</h3>
-          <button
-            onClick={onClose}
-            className="text-white hover:text-gray-200"
-          >
-            <XMarkIcon className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="flex-1 flex items-center justify-center p-4">
-          <div className="text-center">
-            <p className="text-red-600 mb-3">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-            >
-              Try Again
-            </button>
-          </div>
-        </div>
+      <div className="p-4 bg-red-50 text-red-700 rounded-lg">
+        <p>{error}</p>
+        <button 
+          onClick={() => window.location.reload()} 
+          className="mt-2 text-sm underline"
+        >
+          Try again
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col bg-white rounded-lg shadow-xl w-80 sm:w-96 h-96 border border-gray-200">
-      <div className="flex items-center justify-between bg-gradient-to-r from-blue-600 to-blue-500 text-white p-4 rounded-t-lg">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-            <ChatBubbleLeftRightIcon className="h-5 w-5" />
+    <div className="flex flex-col w-[380px] h-[400px] bg-white rounded-xl shadow-2xl overflow-hidden border border-gray-100">
+      <div className="flex items-center justify-between px-5 py-4 border-b bg-gradient-to-r from-blue-500 to-blue-600">
+        <div className="flex items-center">
+          <div className="bg-white/10 rounded-lg p-2 mr-3">
+            <ChatBubbleLeftRightIcon className="h-5 w-5 text-white" />
           </div>
-          <h3 className="font-medium">Client Support</h3>
+          <div>
+            <h2 className="text-base font-semibold text-white">Support Chat</h2>
+            <p className="text-xs text-blue-100">We typically reply within 5 minutes</p>
+          </div>
         </div>
-        <button
-          onClick={onClose}
-          className="text-white hover:text-gray-200 transition-colors p-1"
-        >
-          <XMarkIcon className="h-5 w-5" />
-        </button>
+        {onClose && (
+          <button 
+            onClick={onClose}
+            className="text-white/80 hover:text-white transition-colors"
+          >
+            <XMarkIcon className="h-6 w-6" />
+          </button>
+        )}
       </div>
-      
-      <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
+
+      <div className="flex-1 overflow-y-auto p-4 min-h-0 bg-gray-50">
         {messages.length === 0 ? (
-          <div className="flex flex-col h-full items-center justify-center text-center p-4">
-            <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-4">
-              <ChatBubbleLeftRightIcon className="h-8 w-8 text-blue-500" />
+          <div className="h-full flex flex-col items-center justify-center text-center px-4">
+            <div className="bg-blue-100 rounded-full p-3 mb-3">
+              <ChatBubbleLeftRightIcon className="h-6 w-6 text-blue-600" />
             </div>
-            <p className="text-gray-500 font-medium mb-2">
-              Welcome to Support Chat
-            </p>
-            <p className="text-gray-400 text-sm">
-              How can we help you today? Send us a message and we'll respond as soon as possible.
-            </p>
+            <h3 className="text-gray-800 font-medium mb-1">Welcome to FastyAds Support</h3>
+            <p className="text-sm text-gray-500">How can we help you today? Send us a message and we'll get back to you as soon as possible.</p>
           </div>
         ) : (
-          <div className="space-y-5">
+          <>
             {messages.map((message) => (
               <ChatMessage key={message.id} message={message} />
             ))}
             <div ref={messagesEndRef} />
-          </div>
+          </>
         )}
       </div>
-      
-      <form onSubmit={handleSubmit} className="p-3 border-t border-gray-200 bg-white">
-        <div className="flex items-center gap-2">
+
+      <form onSubmit={handleSubmit} className="p-4 border-t bg-white">
+        <div className="flex gap-2">
           <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             placeholder="Type your message..."
-            className="flex-1 p-2 bg-gray-100 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <button
             type="submit"
             disabled={!newMessage.trim()}
-            className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors shadow-sm"
+            className="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 disabled:opacity-50 disabled:hover:bg-blue-500 transition-colors"
+            title="Send message"
           >
             <PaperAirplaneIcon className="h-5 w-5" />
           </button>
         </div>
       </form>
+
+      {loading && (
+        <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center">
+          <div className="flex flex-col items-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mb-2"></div>
+            <p className="text-sm text-gray-600">Loading chat...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

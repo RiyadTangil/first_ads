@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import Button from '@/components/ui/Button';
 import { getUserFromLocalStorage, isUserAuthenticated } from '@/lib/localStorage';
-import LogoutButton from '@/components/LogoutButton';
+import DashboardCharts from '@/components/dashboard/DashboardCharts';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartBarIcon, UserGroupIcon, LinkIcon, CurrencyDollarIcon } from '@heroicons/react/24/outline';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -38,48 +38,139 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="bg-white shadow-md rounded-lg p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-          <LogoutButton />
-        </div>
-        
-        <div className="mb-6 p-4 bg-blue-50 rounded-md">
-          <p className="text-blue-800">
-            Welcome, <span className="font-bold">{user?.name}</span>
-          </p>
-          <p className="text-blue-600 text-sm mt-1">
-            Email: {user?.email} | Username: {user?.username} | Role: {userRole}
-          </p>
-        </div>
-
-        {isAdmin ? (
-          <div className="bg-purple-50 border border-purple-200 rounded-md p-4 mb-6">
-            <h2 className="text-lg font-semibold text-purple-800 mb-2">Admin Features</h2>
-            <ul className="list-disc list-inside space-y-2 text-purple-700">
-              <li>User Management</li>
-              <li>Content Management</li>
-              <li>System Settings</li>
-              <li>Analytics Dashboard</li>
-            </ul>
-          </div>
-        ) : null}
-
-        <div className="bg-green-50 border border-green-200 rounded-md p-4">
-          <h2 className="text-lg font-semibold text-green-800 mb-2">User Features</h2>
-          <ul className="list-disc list-inside space-y-2 text-green-700">
-            <li>Profile Settings</li>
-            <li>Notifications</li>
-            <li>Messages</li>
-            <li>Activity Log</li>
-          </ul>
-        </div>
-
-        <div className="mt-4 text-sm text-gray-500">
-          <p>Authentication Method: LocalStorage</p>
-          <p>Data is stored locally in your browser.</p>
-        </div>
+      {/* Welcome Section */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-gray-800 mb-2">Welcome back, {user?.name}!</h1>
+        <p className="text-gray-600">Here's what's happening with your account today.</p>
       </div>
+
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-8">
+        <Card className="bg-white shadow-md hover:shadow-lg transition-shadow">
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <div className="p-3 bg-blue-100 rounded-full">
+                <UserGroupIcon className="h-6 w-6 text-blue-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Total Users</p>
+                <p className="text-2xl font-semibold text-gray-900">1,234</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white shadow-md hover:shadow-lg transition-shadow">
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <div className="p-3 bg-green-100 rounded-full">
+                <LinkIcon className="h-6 w-6 text-green-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Active Links</p>
+                <p className="text-2xl font-semibold text-gray-900">56</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white shadow-md hover:shadow-lg transition-shadow">
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <div className="p-3 bg-purple-100 rounded-full">
+                <ChartBarIcon className="h-6 w-6 text-purple-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Total Clicks</p>
+                <p className="text-2xl font-semibold text-gray-900">12.5K</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* <Card className="bg-white shadow-md hover:shadow-lg transition-shadow">
+          <CardContent className="p-6">
+            <div className="flex items-center">
+              <div className="p-3 bg-yellow-100 rounded-full">
+                <CurrencyDollarIcon className="h-6 w-6 text-yellow-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Revenue</p>
+                <p className="text-2xl font-semibold text-gray-900">$4,589</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card> */}
+      </div>
+
+      {/* Charts */}
+      <DashboardCharts />
+
+      {/* Role-specific sections */}
+      {isAdmin && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+          <Card className="bg-white shadow-md">
+            <CardHeader>
+              <CardTitle>Admin Features</CardTitle>
+              <CardDescription>Quick access to administrative tools</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2">
+                <li className="flex items-center text-gray-700">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                  User Management
+                </li>
+                <li className="flex items-center text-gray-700">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                  Content Management
+                </li>
+                <li className="flex items-center text-gray-700">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                  System Settings
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white shadow-md">
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+              <CardDescription>Latest system events</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-4">
+                <li className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <span className="block h-2 w-2 rounded-full bg-blue-600 mt-2"></span>
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-900">New user registration</p>
+                    <p className="text-sm text-gray-500">2 minutes ago</p>
+                  </div>
+                </li>
+                <li className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <span className="block h-2 w-2 rounded-full bg-green-600 mt-2"></span>
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-900">Link approval request</p>
+                    <p className="text-sm text-gray-500">5 minutes ago</p>
+                  </div>
+                </li>
+                <li className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <span className="block h-2 w-2 rounded-full bg-yellow-600 mt-2"></span>
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-900">System update completed</p>
+                    <p className="text-sm text-gray-500">1 hour ago</p>
+                  </div>
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 } 

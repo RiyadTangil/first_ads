@@ -61,6 +61,11 @@ const Icons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
   ),
+  BanknotesIcon: () => (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
+    </svg>
+  ),
 };
 
 // Navigation items
@@ -68,6 +73,7 @@ const navigationItems = [
   { name: 'Dashboard', href: '/dashboard', icon: Icons.Dashboard },
   { name: 'Profile', href: '/dashboard/profile', icon: Icons.Profile },
   { name: 'Ads Links', href: '/dashboard/links', icon: Icons.Links },
+  { name: 'Bank Info', href: '/dashboard/payment', icon: Icons.BanknotesIcon },
   // { name: 'Analytics', href: '/dashboard/analytics', icon: Icons.Analytics },
   // { name: 'Settings', href: '/dashboard/settings', icon: Icons.Settings },
 ];
@@ -78,6 +84,7 @@ const adminNavigationItems = [
   { name: 'Profile', href: '/dashboard/profile', icon: Icons.Profile },
   { name: 'Chat', href: '/dashboard/chat', icon: Icons.Chat },
   { name: 'Manage Links', href: '/dashboard/manage-links', icon: Icons.ManageLinks },
+  { name: 'Bank Info', href: '/dashboard/admin/payment', icon: Icons.BanknotesIcon },
 ];
 
 export default function DashboardLayout({
@@ -159,7 +166,9 @@ export default function DashboardLayout({
           {/* Nav links */}
           <nav className="flex-grow px-4 py-6 space-y-1">
             {(isAdmin ? adminNavigationItems : navigationItems).map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const isActive = item.name === 'Dashboard' 
+                ? pathname === '/dashboard' || pathname.startsWith('/dashboard/') 
+                : pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
                 <Link
                   key={item.name}

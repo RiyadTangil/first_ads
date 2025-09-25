@@ -16,16 +16,7 @@ import {
   MessageResponse,
   User
 } from '@/lib/chatService';
-import { 
-  initSocketClient,
-  joinUserRoom,
-  joinConversation,
-  leaveConversation,
-  sendSocketMessage,
-  markMessagesReadSocket,
-  onReceiveMessage,
-  onMessagesRead
-} from '@/lib/socketClient';
+import AdminChatMessage from './AdminChatMessage';
 
 interface AdminChatClientProps {}
 
@@ -56,6 +47,7 @@ export default function AdminChatClient({}: AdminChatClientProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [admin, setAdmin] = useState<any>(null);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
   
   // Add debounce for mark as read
   const markMessagesReadDebounced = useRef<NodeJS.Timeout | null>(null);
@@ -71,7 +63,6 @@ export default function AdminChatClient({}: AdminChatClientProps) {
     markMessagesReadDebounced.current = setTimeout(async () => {
       try {
         await apiMarkAsRead(conversationId, userId);
-        await markMessagesReadSocket(conversationId, userId);
       } catch (error) {
         console.error('Failed to mark messages as read:', error);
       }
@@ -83,49 +74,40 @@ export default function AdminChatClient({}: AdminChatClientProps) {
     const userData = getUserFromLocalStorage();
     if (userData) {
       setAdmin(userData);
-      
-      // Initialize socket and join admin room
-      const initSocket = async () => {
-        try {
-          console.log('Initializing socket connection for admin...');
-          const socket = await initSocketClient();
-          console.log('Socket initialized, joining admin room...');
-          
-          await joinUserRoom(userData.id, 'admin');
-          console.log('Successfully joined admin room');
-        } catch (err) {
-          console.error('Failed to initialize socket or join admin room:', err);
-          
-          // Add a retry mechanism
-          setTimeout(() => {
-            console.log('Retrying socket initialization...');
-            initSocket();
-          }, 5000);
-        }
-      };
-      
-      initSocket();
+    } else {
+      setError('Please log in to access the admin chat');
+      setIsLoading(false);
     }
   }, []);
 
   // Fetch users
   useEffect(() => {
     async function fetchUsers() {
-      if (!admin?.token) return;
+      if (!admin?.token || !admin?.id) {
+        setError('Authentication required');
+        setUsersLoading(false);
+        setIsLoading(false);
+        return;
+      }
       
       try {
         setUsersLoading(true);
-        const response = await fetch('/api/user/list', {
+        const response = await fetch(`/api/user/list?adminId=${admin.id}`, {
           headers: {
             'Authorization': `Bearer ${admin.token}`
           }
         });
         
         if (!response.ok) {
-          throw new Error('Failed to fetch users');
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch users');
         }
         
         const data = await response.json();
+        
+        if (!data.success || !data.users) {
+          throw new Error('Invalid response format from server');
+        }
         
         // Now get all conversations for the admin
         const conversations = await getConversations(admin.id, true);
@@ -148,13 +130,13 @@ export default function AdminChatClient({}: AdminChatClientProps) {
         setIsLoading(false);
       } catch (error) {
         console.error('Error fetching users:', error);
-        setError('Failed to load users. Please try again later.');
+        setError(error instanceof Error ? error.message : 'Failed to load users. Please try again later.');
         setUsersLoading(false);
         setIsLoading(false);
       }
     }
     
-    if (admin?.id) {
+    if (admin?.id && admin?.token) {
       fetchUsers();
     }
   }, [admin?.id, admin?.token]);
@@ -226,100 +208,37 @@ export default function AdminChatClient({}: AdminChatClientProps) {
     };
   }, [selectedUserId, admin?.id]);
 
-  // Set up socket event listeners
+  // Set up polling for messages
   useEffect(() => {
     if (!currentConversation?._id || !admin?.id) return;
     
-    // Set up listener for new messages
-    let messageCleanup: (() => void) | undefined = undefined;
-    let readCleanup: (() => void) | undefined = undefined;
-    
-    const setupSocketListeners = async () => {
+    // Clear any existing polling interval
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+    }
+
+    // Set up new polling interval
+    const interval = setInterval(async () => {
       try {
-        console.log(`Setting up socket listeners for conversation: ${currentConversation._id}`);
-        
-        // Join the conversation room first
-        await joinConversation(currentConversation._id);
-        
-        // Set up listener for new messages
-        const messageCleaner = await onReceiveMessage((message) => {
-          // Only handle if for current conversation
-          if (currentConversation._id === message.conversation) {
-            setMessages(prev => {
-              // Check if this message is already in the list to avoid duplicates
-              const messageExists = prev.some(msg => msg.id === message._id);
-              if (messageExists) {
-                return prev;
-              }
-              return [...prev, convertToMessageType(message)];
-            });
-            
-            // If message is from user, mark as read immediately
-            if (message.senderType === 'user' && admin?.id) {
-              markMessagesAsReadWithDebounce(message.conversation, admin.id);
-            }
-          } else {
-            // Update unread count for the user who sent the message
-            // Find the user this message is from
-            const senderId = message.sender._id;
-            
-            setUsers(prevUsers => 
-              prevUsers.map(user => {
-                // If this is the user who sent the message
-                if (user._id === senderId && message.senderType === 'user') {
-                  return { 
-                    ...user, 
-                    unreadCount: (user.unreadCount || 0) + 1 
-                  };
-                }
-                return user;
-              })
-            );
-          }
-        });
-        
-        // Set up listener for read receipts
-        const readCleaner = await onMessagesRead(({ conversationId, userId }) => {
-          // Update messages to show as read
-          if (currentConversation._id === conversationId) {
-            setMessages(prev => 
-              prev.map(msg => 
-                msg.sender === 'admin' ? { ...msg, read: true } : msg
-              )
-            );
-          }
-        });
-        
-        messageCleanup = messageCleaner;
-        readCleanup = readCleaner;
-        
-        console.log('Socket listeners set up successfully');
+        // Fetch latest messages
+        const messagesData = await getMessages(currentConversation._id);
+        setMessages(messagesData.map(convertToMessageType));
+
+        // Mark messages as read
+        if (currentConversation.unreadCount > 0) {
+          await apiMarkAsRead(currentConversation._id, admin.id);
+        }
       } catch (error) {
-        console.error('Error setting up socket listeners:', error);
+        console.error('Error polling messages:', error);
       }
-    };
+    }, 3000); // Poll every 3 seconds
     
-    // Call the async setup function
-    setupSocketListeners();
+    setPollingInterval(interval);
     
-    // Clean up
+    // Cleanup
     return () => {
-      console.log(`Cleaning up socket listeners for conversation: ${currentConversation._id}`);
-      
-      if (messageCleanup) {
-        messageCleanup();
-        console.log('Message listener cleaned up');
-      }
-      
-      if (readCleanup) {
-        readCleanup();
-        console.log('Read receipt listener cleaned up');
-      }
-      
-      // Leave conversation room
-      if (currentConversation._id) {
-        leaveConversation(currentConversation._id)
-          .catch(err => console.error('Error leaving conversation:', err));
+      if (interval) {
+        clearInterval(interval);
       }
     };
   }, [currentConversation?._id, admin?.id]);
@@ -327,26 +246,15 @@ export default function AdminChatClient({}: AdminChatClientProps) {
   // Handle message submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!currentConversation?._id || !admin?.id || newMessage.trim() === '') return;
-    
+    if (!newMessage.trim() || !currentConversation?._id || !admin?.id) return;
+
     try {
-      // Send the message via API
-      const sentMessage = await apiSendMessage(
-        currentConversation._id,
-        admin.id,
-        newMessage,
-        'admin'
-      );
-      
-      // Add it to the UI
-      setMessages(prev => [...prev, convertToMessageType(sentMessage)]);
+      const message = await apiSendMessage(currentConversation._id, admin.id, newMessage, 'admin');
+      setMessages(prev => [...prev, convertToMessageType(message)]);
       setNewMessage('');
-      
-      // Send the message via Socket.IO
-      await sendSocketMessage(currentConversation._id, sentMessage);
-    } catch (err) {
-      console.error('Failed to send message:', err);
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      setError('Failed to send message. Please try again.');
     }
   };
   
@@ -482,7 +390,7 @@ export default function AdminChatClient({}: AdminChatClientProps) {
               ) : (
                 <div className="space-y-6">
                   {messages.map((message) => (
-                    <ChatMessage key={message.id} message={message} />
+                    <AdminChatMessage key={message.id} message={message} />
                   ))}
                   <div ref={messagesEndRef} />
                 </div>
